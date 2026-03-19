@@ -48,14 +48,32 @@ class RotaryEmbedding(nn.Module):
         return query, key
 
 
+def _rope_scaling_is_standard(rope_scaling: dict | None) -> bool:
+    """HF maps JSON rope_scaling: null + rope_theta into {\"rope_type\": \"default\", ...}."""
+    if rope_scaling is None:
+        return True
+    return isinstance(rope_scaling, dict) and rope_scaling.get("rope_type") == "default"
+
+
 @lru_cache(1)
+def _get_rope_cached(
+    head_size: int,
+    rotary_dim: int,
+    max_position: int,
+    base: float,
+) -> RotaryEmbedding:
+    return RotaryEmbedding(head_size, rotary_dim, max_position, base)
+
+
 def get_rope(
     head_size: int,
     rotary_dim: int,
     max_position: int,
     base: float,
     rope_scaling: dict | None = None,
-):
-    assert rope_scaling is None
-    rotary_emb = RotaryEmbedding(head_size, rotary_dim, max_position, base)
-    return rotary_emb
+) -> RotaryEmbedding:
+    if not _rope_scaling_is_standard(rope_scaling):
+        raise NotImplementedError(
+            f"Only standard RoPE is implemented (got rope_scaling={rope_scaling!r})"
+        )
+    return _get_rope_cached(head_size, rotary_dim, max_position, base)
